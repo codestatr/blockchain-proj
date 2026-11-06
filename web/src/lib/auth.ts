@@ -15,9 +15,13 @@ type UserRow = { id: string; name: string; email: string; password_hash: string;
 type Sql = ReturnType<typeof neon>;
 type AuthGlobal = typeof globalThis & { recircleDb?: DatabaseSync; recircleSql?: Sql; recircleSchemaReady?: Promise<void> };
 
+function hostedDatabaseUrl() {
+  return process.env.NETLIFY_DB_URL?.trim() || process.env.DATABASE_URL?.trim();
+}
+
 function localDatabase() {
-  if (process.env.NODE_ENV === "production" && !process.env.DATABASE_URL) {
-    throw new Error("DATABASE_URL must be configured in production; local SQLite is only for development.");
+  if (process.env.NODE_ENV === "production" && !hostedDatabaseUrl()) {
+    throw new Error("Configure a hosted Postgres database for production. On Netlify, create one under Data & Storage > Database.");
   }
   const global = globalThis as AuthGlobal;
   if (global.recircleDb) return global.recircleDb;
@@ -42,14 +46,16 @@ function localDatabase() {
 }
 
 async function postgres(): Promise<Sql> {
-  const configuredUrl = process.env.DATABASE_URL?.trim();
-  if (!configuredUrl) throw new Error("DATABASE_URL is required to use the hosted auth database.");
+  const configuredUrl = hostedDatabaseUrl();
+  if (!configuredUrl) throw new Error("A hosted Postgres database is required for account storage.");
 
   // Neon provides a `psql 'postgresql://…'` command in its dashboard. Accept
   // that command as well as a bare URL, since it is easy to paste the whole
   // command into a hosting environment variable by mistake.
   const commandUrl = configuredUrl.match(/^psql\s+(['"])(postgres(?:ql)?:\/\/.*)\1\s*$/i)?.[2];
-  const unwrappedUrl = (commandUrl ?? configuredUrl).replace(/^(['"])(.*)\1$/, "$2").trim();
+  const copiedUrl = (commandUrl ?? configuredUrl).replace(/^(['"])(.*)\1$/, "$2").trim();
+  // Recover when the scheme was accidentally omitted in Netlify's bulk editor.
+  const unwrappedUrl = copiedUrl.startsWith("//") ? `postgresql:${copiedUrl}` : copiedUrl;
   let parsedUrl: URL;
   try {
     parsedUrl = new URL(unwrappedUrl);
@@ -104,7 +110,7 @@ export async function registerUser(name: string, email: string, password: string
   const normalizedEmail = email.toLowerCase();
   const passwordHash = await hashPassword(password);
   try {
-    if (process.env.DATABASE_URL) {
+    if (hostedDatabaseUrl()) {
       const sql = await postgres();
       const rows = (await sql`INSERT INTO users (id,name,email,password_hash,created_at)
         VALUES (${id},${name},${normalizedEmail},${passwordHash},${now}) RETURNING id,name,email,wallet_address`) as unknown as UserRow[];
@@ -123,7 +129,7 @@ export async function registerUser(name: string, email: string, password: string
 
 export async function authenticateUser(email: string, password: string): Promise<User | null> {
   let row: UserRow | undefined;
-  if (process.env.DATABASE_URL) {
+  if (hostedDatabaseUrl()) {
     const sql = await postgres();
     const rows = (await sql`SELECT id,name,email,password_hash,wallet_address FROM users WHERE email=${email.trim().toLowerCase()} LIMIT 1`) as unknown as UserRow[];
     row = rows[0] as UserRow | undefined;
@@ -139,7 +145,7 @@ export async function startSession(userId: string) {
   const token = randomBytes(32).toString("base64url");
   const now = Math.floor(Date.now() / 1000);
   const expires = now + SESSION_SECONDS;
-  if (process.env.DATABASE_URL) {
+  if (hostedDatabaseUrl()) {
     const sql = await postgres();
     await sql`DELETE FROM sessions WHERE expires_at <= ${now}`;
     await sql`INSERT INTO sessions (token_hash,user_id,expires_at,created_at) VALUES (${tokenHash(token)},${userId},${expires},${now})`;
@@ -157,7 +163,7 @@ export async function getCurrentUser(): Promise<User | null> {
   if (!token) return null;
   const hash = tokenHash(token);
   const now = Math.floor(Date.now() / 1000);
-  if (process.env.DATABASE_URL) {
+  if (hostedDatabaseUrl()) {
     const sql = await postgres();
     const rows = (await sql`SELECT u.id,u.name,u.email,u.password_hash,u.wallet_address FROM sessions s
       JOIN users u ON u.id=s.user_id WHERE s.token_hash=${hash} AND s.expires_at>${now} LIMIT 1`) as unknown as UserRow[];
@@ -178,7 +184,7 @@ export async function getUserForRequest(request: Request): Promise<User | null> 
   if (!token) return null;
   const hash = tokenHash(token);
   const now = Math.floor(Date.now() / 1000);
-  if (process.env.DATABASE_URL) {
+  if (hostedDatabaseUrl()) {
     const sql = await postgres();
     const rows = (await sql`SELECT u.id,u.name,u.email,u.password_hash,u.wallet_address FROM sessions s
       JOIN users u ON u.id=s.user_id WHERE s.token_hash=${hash} AND s.expires_at>${now} LIMIT 1`) as unknown as UserRow[];
@@ -192,7 +198,7 @@ export async function getUserForRequest(request: Request): Promise<User | null> 
 export async function endSession(request?: Request) {
   const token = request ? requestToken(request) : cookies().get(SESSION_COOKIE)?.value;
   if (token) {
-    if (process.env.DATABASE_URL) {
+    if (hostedDatabaseUrl()) {
       const sql = await postgres();
       await sql`DELETE FROM sessions WHERE token_hash=${tokenHash(token)}`;
     } else localDatabase().prepare("DELETE FROM sessions WHERE token_hash=?").run(tokenHash(token));
@@ -203,7 +209,7 @@ export async function endSession(request?: Request) {
 export async function issueWalletNonce(userId: string) {
   const nonce = randomBytes(24).toString("hex");
   const expires = Math.floor(Date.now() / 1000) + 5 * 60;
-  if (process.env.DATABASE_URL) {
+  if (hostedDatabaseUrl()) {
     const sql = await postgres();
     await sql`UPDATE users SET wallet_nonce=${nonce},wallet_nonce_expires=${expires} WHERE id=${userId}`;
   } else localDatabase().prepare("UPDATE users SET wallet_nonce=?,wallet_nonce_expires=? WHERE id=?").run(nonce, expires, userId);
@@ -212,7 +218,7 @@ export async function issueWalletNonce(userId: string) {
 
 export async function consumeWalletNonce(userId: string, nonce: string) {
   const now = Math.floor(Date.now() / 1000);
-  if (process.env.DATABASE_URL) {
+  if (hostedDatabaseUrl()) {
     const sql = await postgres();
     const rows = (await sql`UPDATE users SET wallet_nonce=NULL,wallet_nonce_expires=NULL
       WHERE id=${userId} AND wallet_nonce=${nonce} AND wallet_nonce_expires >= ${now} RETURNING id`) as unknown as { id: string }[];
@@ -227,7 +233,7 @@ export async function consumeWalletNonce(userId: string, nonce: string) {
 
 export async function linkWallet(userId: string, address: string) {
   try {
-    if (process.env.DATABASE_URL) {
+    if (hostedDatabaseUrl()) {
       const sql = await postgres();
       await sql`UPDATE users SET wallet_address=${address} WHERE id=${userId}`;
     } else localDatabase().prepare("UPDATE users SET wallet_address=? WHERE id=?").run(address, userId);
