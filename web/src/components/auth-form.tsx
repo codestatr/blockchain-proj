@@ -17,7 +17,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
     try {
       const response = await fetch(`/api/auth/${mode}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const result = await response.json();
-      if (!response.ok) throw new Error(result.error || "Authentication failed.");
+      if (!response.ok) throw new Error(`${result.error || "Authentication failed."}${result.referenceId ? ` Reference: ${result.referenceId}` : ""}`);
       router.replace("/"); router.refresh();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not complete your request.");
