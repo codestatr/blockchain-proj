@@ -1,0 +1,7 @@
+[build]
+command = "npm run build --workspace web"
+publish = "web/.next"
+
+[build.environment]
+NODE_VERSION = "24"
+NEXT_PUBLIC_APP_URL = "https://wastesystem.netlify.app"

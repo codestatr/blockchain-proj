@@ -1,4 +1,4 @@
-# ReCircle — Recycle to Earn
+# Waste System — Recycle to Earn
 
 A locally deployable waste rewards system aligned with **UN SDG 11, Target 11.6**. Citizens create accounts, link a wallet by signing a verification message, and access their recycling activity. An authorized server signer records deposits on-chain and mints RecycleToken (RCT) at **10 RCT per kilogram**, prorated by gram.
 
