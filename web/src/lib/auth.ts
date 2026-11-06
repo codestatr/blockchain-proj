@@ -42,9 +42,26 @@ function localDatabase() {
 }
 
 async function postgres(): Promise<Sql> {
-  if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is required to use the hosted auth database.");
+  const configuredUrl = process.env.DATABASE_URL?.trim();
+  if (!configuredUrl) throw new Error("DATABASE_URL is required to use the hosted auth database.");
+
+  // Neon provides a `psql 'postgresql://…'` command in its dashboard. Accept
+  // that command as well as a bare URL, since it is easy to paste the whole
+  // command into a hosting environment variable by mistake.
+  const commandUrl = configuredUrl.match(/^psql\s+(['"])(postgres(?:ql)?:\/\/.*)\1\s*$/i)?.[2];
+  const unwrappedUrl = (commandUrl ?? configuredUrl).replace(/^(['"])(.*)\1$/, "$2").trim();
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(unwrappedUrl);
+  } catch {
+    throw new Error("DATABASE_URL must be a PostgreSQL connection URL. Copy the connection string from Neon and paste the URL only.");
+  }
+  if (!["postgres:", "postgresql:"].includes(parsedUrl.protocol) || !parsedUrl.username || !parsedUrl.hostname || parsedUrl.pathname.length < 2) {
+    throw new Error("DATABASE_URL must include a PostgreSQL scheme, username, host, and database name. Copy the connection string from Neon.");
+  }
+
   const global = globalThis as AuthGlobal;
-  if (!global.recircleSql) global.recircleSql = neon(process.env.DATABASE_URL);
+  if (!global.recircleSql) global.recircleSql = neon(unwrappedUrl);
   if (!global.recircleSchemaReady) {
     const sql = global.recircleSql;
     global.recircleSchemaReady = (async () => {
