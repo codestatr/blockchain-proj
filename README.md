@@ -108,11 +108,10 @@ Never put `ADMIN_PRIVATE_KEY` or `DEPLOYER_PRIVATE_KEY` in a `NEXT_PUBLIC_` vari
 Local development continues to use SQLite. In production, set `DATABASE_URL` to a Neon Postgres connection string and the account APIs use Postgres automatically. The schema is created on first use. Keep the database URL and `ADMIN_PRIVATE_KEY` server-only.
 
 1. Create a Neon project on its Free plan and copy its pooled Postgres connection string.
-2. Import this repository into Netlify and select `web` as the site package directory. Leave the base directory at the repository root so Netlify installs the npm workspace dependencies. The checked-in `web/netlify.toml` sets the build command and Node version.
+2. Import this repository into Netlify and select `web` as the site package directory. Leave the base directory at the repository root so Netlify installs the npm workspace dependencies. The root `netlify.toml` sets the build command and Node version.
 3. Add these variables in Netlify's site environment settings:
 
-   ```dotenv
-   DATABASE_URL=postgresql://...   # Neon pooled connection string
+   ```dotenv   DATABASE_URL=<PASTE_NEON_CONNECTION_STRING_HERE>   # Neon pooled connection string
    NEXT_PUBLIC_CHAIN_ID=84532
    NEXT_PUBLIC_BASE_SEPOLIA_CONTRACT_ADDRESS=0xYOUR_DEPLOYED_ADDRESS
    NEXT_PUBLIC_BASE_SEPOLIA_RPC_URL=https://sepolia.base.org
