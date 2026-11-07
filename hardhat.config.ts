@@ -1,7 +1,11 @@
 import "@nomicfoundation/hardhat-ethers";
 import "@nomicfoundation/hardhat-chai-matchers";
-import "dotenv/config";
+import { config as loadEnv } from "dotenv";
 import { HardhatUserConfig } from "hardhat/config";
+
+// Keep blockchain deployment secrets in the repo's dedicated, gitignored file.
+loadEnv({ path: ".env.blockchain" });
+loadEnv();
 
 const accounts = process.env.DEPLOYER_PRIVATE_KEY ? [process.env.DEPLOYER_PRIVATE_KEY] : [];
 const config: HardhatUserConfig = {

@@ -51,10 +51,10 @@ In terminal 2 deploy to the local node:
 npm run deploy:local
 ```
 
-Copy the printed contract address. Keep deployment settings in the root `.env`, and copy `web/.env.example` to `web/.env.local` for the Next.js app:
+Copy the printed contract address. Keep blockchain deployment settings in the root `.env.blockchain` file (loaded by Hardhat and gitignored), and copy `web/.env.example` to `web/.env.local` for the Next.js app:
 
 ```dotenv
-# root .env: use the first Hardhat node account's private key for local deployment/oracle use
+# root .env.blockchain: use the first Hardhat node account's private key for local deployment/oracle use
 DEPLOYER_PRIVATE_KEY=
 ADMIN_PRIVATE_KEY=0x...
 
@@ -77,7 +77,7 @@ Visit `http://localhost:3002`, register an account, connect MetaMask to Localhos
 
 ## Base Sepolia deployment
 
-Get free test ETH from an available Base Sepolia faucet and configure root `.env`:
+Get free test ETH from an available Base Sepolia faucet and configure root `.env.blockchain`:
 
 ```dotenv
 BASE_SEPOLIA_RPC_URL=https://sepolia.base.org
@@ -132,6 +132,6 @@ The contract exposes `totalWeightInGrams` and emits a `DepositRecorded` event fo
 
 ## Notes
 
-- The full transaction history is on-chain as events and deposit mappings. The current dashboard shows deposits submitted during the current browser session; indexed historical history can be added with an indexer or event query.
+- The deposit mappings are on-chain, and the dashboard loads each linked wallet's recorded deposits from the contract. The bin ID is included in the API log for operational context but is not stored in the contract.
 - `DEPOSIT_API_SECRET` is reserved for a future authenticated bin gateway and is not currently used by the user interface.
 - Contract ownership is a sensitive role; retain owner control and use a separate testnet key for the API oracle where practical.

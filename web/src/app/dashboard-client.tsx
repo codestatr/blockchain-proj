@@ -31,6 +31,7 @@ export default function Dashboard({ user }: { user: User }) {
   const [transferError, setTransferError] = useState("");
   const [transferHash, setTransferHash] = useState<`0x${string}` | null>(null);
   const [wasteType, setWasteType] = useState("Plastic");
+  const [binId, setBinId] = useState("BIN-001");
   const [weight, setWeight] = useState("500");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -63,7 +64,7 @@ export default function Dashboard({ user }: { user: User }) {
     if (!Number.isInteger(grams) || grams < 1 || grams > 100_000) { setError("Enter a whole number from 1 to 100,000 grams."); return; }
     setSubmitting(true);
     try {
-      const response = await fetch("/api/deposit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ wasteType, weightInGrams: grams, binId: "BIN-001", chainId }) });
+      const response = await fetch("/api/deposit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ wasteType, weightInGrams: grams, binId: binId.trim(), chainId }) });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Deposit failed.");
       setDeposits((rows) => [{ id: BigInt(result.depositId), wasteType, weight: BigInt(grams), timestamp: BigInt(Math.floor(Date.now() / 1000)), reward: BigInt(grams) * 10n ** 16n, txHash: result.transactionHash }, ...rows]);
@@ -142,8 +143,8 @@ export default function Dashboard({ user }: { user: User }) {
     {error && !modalOpen && <div className="error page-error" role="alert">{error}</div>}
     <section className="grid">
       <article className="card"><div className="metric-label">Your RCT balance</div><div className="metric">{balanceText} <span style={{fontSize:15}}>RCT</span></div><div className="metric-note">10 RCT for every kilogram</div></article>
-      <article className="card"><div className="metric-label">Total waste diverted</div><div className="metric">{totalKg} <span style={{fontSize:15}}>kg</span></div><div className="metric-note">Verified on chain</div></article>
-      <article className="card"><div className="metric-label">Your deposits this session</div><div className="metric">{deposits.length}</div><div className="metric-note">Thanks for keeping materials in use</div></article>
+      <article className="card"><div className="metric-label">Total waste recorded</div><div className="metric">{totalKg} <span style={{fontSize:15}}>kg</span></div><div className="metric-note">On-chain record; weight is user-entered</div></article>
+      <article className="card"><div className="metric-label">Your recorded deposits</div><div className="metric">{history.length}</div><div className="metric-note">Loaded from your reward wallet on chain</div></article>
     </section>
     <section className="content">
       <article className="card"><div className="section-head"><h2>Deposit history</h2><span className="muted">Recent activity</span></div>
@@ -160,6 +161,7 @@ export default function Dashboard({ user }: { user: User }) {
     <footer className="footer">Waste System · Supporting SDG 11.6 through circular cities</footer>
     {modalOpen && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !submitting) setModalOpen(false); }}><form className="modal" onSubmit={submitDeposit}><h2>Record a deposit</h2><p className="muted">Rewards are calculated at 10 RCT per kilogram.</p>
       <label className="field">Material<select value={wasteType} onChange={(event) => setWasteType(event.target.value)}><option>Plastic</option><option>Glass</option><option>Metal</option></select></label>
+      <label className="field">Collection point ID<input value={binId} onChange={(event) => setBinId(event.target.value)} minLength={1} maxLength={40} required /></label>
       <label className="field">Weight in grams<input type="number" min="1" max="100000" step="1" value={weight} onChange={(event) => setWeight(event.target.value)} required/></label>
       <div className="muted" style={{marginTop:10}}>Estimated reward: {(Number(weight || 0) / 100).toFixed(2)} RCT</div>
       {error && <div className="error" role="alert">{error}</div>}
