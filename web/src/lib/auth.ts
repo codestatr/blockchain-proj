@@ -16,7 +16,9 @@ type Sql = ReturnType<typeof neon>;
 type AuthGlobal = typeof globalThis & { recircleDb?: DatabaseSync; recircleSql?: Sql; recircleSchemaReady?: Promise<void> };
 
 function hostedDatabaseUrl() {
-  return process.env.NETLIFY_DB_URL?.trim() || process.env.DATABASE_URL?.trim();
+  // Prefer the explicitly configured Neon URL. A stale Netlify-managed value
+  // must not silently override DATABASE_URL after a user updates it.
+  return process.env.DATABASE_URL?.trim() || process.env.NETLIFY_DB_URL?.trim();
 }
 
 function localDatabase() {
