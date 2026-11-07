@@ -39,15 +39,16 @@ export default function Dashboard({ user }: { user: User }) {
   const [walletLinking, setWalletLinking] = useState(false);
   const [walletConnecting, setWalletConnecting] = useState(false);
   const supported = chainId === hardhatLocal.id || chainId === baseSepolia.id;
+  const isConfigured = isAddress(contractAddress) && contractAddress !== "0x0000000000000000000000000000000000000000";
   const explorerBase = chainId === baseSepolia.id ? baseSepolia.blockExplorers?.default.url : undefined;
 
-  const { data: balance, refetch: refetchBalance } = useReadContract({ address: contractAddress, abi: wasteRewardAbi, functionName: "balanceOf", args: address ? [address] : undefined, query: { enabled: isConnected && supported && contractAddress !== "0x0000000000000000000000000000000000000000" } });
-  const { data: depositIds, refetch: refetchDepositIds } = useReadContract({ address: contractAddress, abi: wasteRewardAbi, functionName: "getCitizenDepositIds", args: address ? [address] : undefined, query: { enabled: isConnected && supported && contractAddress !== "0x0000000000000000000000000000000000000000" } });
+  const { data: balance, refetch: refetchBalance } = useReadContract({ address: contractAddress, abi: wasteRewardAbi, functionName: "balanceOf", args: address ? [address] : undefined, query: { enabled: isConnected && supported && isConfigured } });
+  const { data: depositIds, refetch: refetchDepositIds } = useReadContract({ address: contractAddress, abi: wasteRewardAbi, functionName: "getCitizenDepositIds", args: address ? [address] : undefined, query: { enabled: isConnected && supported && isConfigured } });
   const { data: onChainRows } = useReadContracts({
     contracts: (depositIds ?? []).map((id) => ({ address: contractAddress, abi: wasteRewardAbi, functionName: "deposits" as const, args: [id] })),
     query: { enabled: !!depositIds?.length }
   });
-  const { data: totalWeight } = useReadContract({ address: contractAddress, abi: wasteRewardAbi, functionName: "totalWeightInGrams", query: { enabled: supported && contractAddress !== "0x0000000000000000000000000000000000000000" } });
+  const { data: totalWeight } = useReadContract({ address: contractAddress, abi: wasteRewardAbi, functionName: "totalWeightInGrams", query: { enabled: supported && isConfigured } });
   const totalKg = totalWeight ? (Number(totalWeight) / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 }) : "0";
   const balanceText = balance !== undefined ? Number(formatEther(balance)).toLocaleString(undefined, { maximumFractionDigits: 2 }) : "0.00";
   async function connectWallet() {
@@ -69,7 +70,7 @@ export default function Dashboard({ user }: { user: User }) {
       await Promise.race([
         connectAsync({ connector: selected }),
         new Promise<never>((_, reject) => {
-          timeoutId = window.setTimeout(() => reject(new Error("The wallet did not respond. Unlock it, close any pending wallet prompt, and try again.")), 20_000);
+          timeoutId = window.setTimeout(() => reject(new Error("No response came from the wallet. Approve the connection in Rabby, or close the pending wallet prompt and retry.")), 60_000);
         })
       ]);
     } catch (cause) {
@@ -154,7 +155,6 @@ export default function Dashboard({ user }: { user: User }) {
     disconnect(); router.replace("/login"); router.refresh();
   }
 
-  const isConfigured = contractAddress !== "0x0000000000000000000000000000000000000000";
   const history = useMemo(() => {
     const sessionRows = new Map(deposits.map((row) => [row.id.toString(), row]));
     const rows = (onChainRows ?? []).flatMap((entry) => {
@@ -168,7 +168,7 @@ export default function Dashboard({ user }: { user: User }) {
 
   return <main className="shell">
     <header className="topbar"><div className="brand"><span className="brand-mark">↻</span> Waste System</div>
-      {isConnected ? <button className="connect" onClick={() => disconnect()}>{shortAddress(address)} · Disconnect</button> : <button className="connect" disabled={walletConnecting} onClick={connectWallet}>{walletConnecting ? "Connecting…" : "Connect wallet"}</button>}
+      {isConnected ? <button className="connect" onClick={() => disconnect()}>{shortAddress(address)} · Disconnect</button> : <button className="connect" disabled={walletConnecting} onClick={connectWallet}>{walletConnecting ? "Approve in wallet…" : "Connect wallet"}</button>}
       <span className="account-name">{user.name}</span><button className="secondary" onClick={logout}>Sign out</button>
     </header>
     <div className="hero"><div><div className="eyebrow">Circular cities start here</div><h1>Waste less.<br/>Earn more.</h1><p className="sub">Your recycling makes a measurable difference.</p></div>

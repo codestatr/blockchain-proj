@@ -15,6 +15,7 @@ const schema = z.object({
   chainId: z.number().int().refine((id) => id === 31337 || id === 84532, "Unsupported network")
 });
 const abi = parseAbi(["function recordDeposit(address citizen,string wasteType,uint256 weightInGrams) returns (uint256 depositId)", "event DepositRecorded(uint256 indexed depositId,address indexed citizen,string wasteType,uint256 weightInGrams,uint256 reward)"]);
+const ownerAbi = parseAbi(["function owner() view returns (address)"]);
 
 export async function POST(request: NextRequest) {
   try {
@@ -41,6 +42,15 @@ export async function POST(request: NextRequest) {
     const transport = http(rpcUrl);
     const publicClient = createPublicClient({ chain, transport });
     const walletClient = createWalletClient({ account, chain, transport });
+
+    const code = await publicClient.getCode({ address: getAddress(contractAddress) });
+    if (!code || code === "0x") {
+      return NextResponse.json({ error: "No RCT contract exists at that address on the selected network. Check the deployed address and network configuration." }, { status: 503 });
+    }
+    const owner = await publicClient.readContract({ address: getAddress(contractAddress), abi: ownerAbi, functionName: "owner" });
+    if (owner.toLowerCase() !== account.address.toLowerCase()) {
+      return NextResponse.json({ error: "The deposit signing wallet is not the RCT contract owner. Configure ADMIN_PRIVATE_KEY with the contract owner's key." }, { status: 503 });
+    }
 
     // A bin ID is included for audit context. The current contract stores the material and weight only.
     console.info("Deposit request", { citizen: user.walletAddress, binId: body.data.binId, wasteType: body.data.wasteType, weightInGrams: body.data.weightInGrams });

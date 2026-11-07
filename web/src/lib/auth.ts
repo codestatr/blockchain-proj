@@ -21,6 +21,10 @@ function hostedDatabaseUrl() {
   return process.env.DATABASE_URL?.trim() || process.env.NETLIFY_DB_URL?.trim();
 }
 
+export function hasHostedDatabase() {
+  return Boolean(hostedDatabaseUrl());
+}
+
 function localDatabase() {
   if (process.env.NODE_ENV === "production" && !hostedDatabaseUrl()) {
     throw new Error("Configure a hosted Postgres database for production. On Netlify, create one under Data & Storage > Database.");
@@ -85,7 +89,14 @@ async function postgres(): Promise<Sql> {
       await sql`CREATE INDEX IF NOT EXISTS sessions_user_id_idx ON sessions(user_id)`;
     })();
   }
-  await global.recircleSchemaReady;
+  try {
+    await global.recircleSchemaReady;
+  } catch (error) {
+    // Let later requests retry after transient Neon startup/network failures.
+    global.recircleSchemaReady = undefined;
+    global.recircleSql = undefined;
+    throw error;
+  }
   return global.recircleSql;
 }
 

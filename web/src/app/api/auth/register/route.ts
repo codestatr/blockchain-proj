@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { registerUser, startSession } from "@/lib/auth";
+import { hasHostedDatabase, registerUser, startSession } from "@/lib/auth";
 
 export const runtime = "nodejs";
 const schema = z.object({
@@ -15,8 +15,10 @@ export async function POST(request: NextRequest) {
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Enter your name, a valid email, and a password of at least 12 characters." }, { status: 400 });
   let stage = "create_user";
+  let accountCreated = false;
   try {
     const user = await registerUser(parsed.data.name, parsed.data.email, parsed.data.password);
+    accountCreated = true;
     stage = "start_session";
     await startSession(user.id);
     return NextResponse.json({ user }, { status: 201 });
@@ -35,11 +37,14 @@ export async function POST(request: NextRequest) {
       event: "auth.register.failed",
       referenceId,
       stage,
-      databaseConfigured: Boolean(process.env.DATABASE_URL),
+      databaseConfigured: hasHostedDatabase(),
       errorName: error instanceof Error ? error.name : "UnknownError",
       errorCode: code,
       errorMessage: safeDetail
     }));
+    if (accountCreated) {
+      return NextResponse.json({ error: "Your account was created, but sign-in could not be started. Please sign in with the email and password you just used.", referenceId }, { status: 503 });
+    }
     return NextResponse.json({ error: "Could not create your account.", referenceId }, { status: 500 });
   }
 }
