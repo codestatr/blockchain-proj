@@ -17,7 +17,7 @@ export default function Dashboard({ user }: { user: User }) {
   const router = useRouter();
   const { address, isConnected, chainId } = useAccount();
   const contractAddress = contractAddressForChain(chainId);
-  const { connect, connectors, isPending: connecting } = useConnect();
+  const { connectAsync, connectors, isPending: connecting } = useConnect();
   const { disconnect } = useDisconnect();
   const { switchChain, isPending: switching } = useSwitchChain();
   const { signMessageAsync } = useSignMessage();
@@ -50,6 +50,26 @@ export default function Dashboard({ user }: { user: User }) {
   const totalKg = totalWeight ? (Number(totalWeight) / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 }) : "0";
   const balanceText = balance !== undefined ? Number(formatEther(balance)).toLocaleString(undefined, { maximumFractionDigits: 2 }) : "0.00";
   const connector = connectors[0];
+
+  async function connectWallet() {
+    setError("");
+    if (!connector) {
+      setError("No wallet connector is available. Install or enable a browser wallet such as MetaMask, then reload this page.");
+      return;
+    }
+    try {
+      await connectAsync({ connector });
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : "Wallet connection failed.";
+      if (/provider not found|not found/i.test(message)) {
+        setError("No browser wallet was found. Install or enable MetaMask, then reload this page.");
+      } else if (/user rejected|user denied|rejected the request/i.test(message)) {
+        setError("The wallet request was cancelled. Approve the connection in your wallet to continue.");
+      } else {
+        setError(message.length > 240 ? `${message.slice(0, 237)}…` : message);
+      }
+    }
+  }
 
   const switchToChain = async (target: number) => {
     try { await switchChain({ chainId: target }); }
@@ -130,7 +150,7 @@ export default function Dashboard({ user }: { user: User }) {
 
   return <main className="shell">
     <header className="topbar"><div className="brand"><span className="brand-mark">↻</span> Waste System</div>
-      {isConnected ? <button className="connect" onClick={() => disconnect()}>{shortAddress(address)} · Disconnect</button> : <button className="connect" disabled={connecting} onClick={() => connector && connect({ connector })}>{connecting ? "Connecting…" : "Connect wallet"}</button>}
+      {isConnected ? <button className="connect" onClick={() => disconnect()}>{shortAddress(address)} · Disconnect</button> : <button className="connect" disabled={connecting} onClick={connectWallet}>{connecting ? "Connecting…" : "Connect wallet"}</button>}
       <span className="account-name">{user.name}</span><button className="secondary" onClick={logout}>Sign out</button>
     </header>
     <div className="hero"><div><div className="eyebrow">Circular cities start here</div><h1>Waste less.<br/>Earn more.</h1><p className="sub">Your recycling makes a measurable difference.</p></div>
