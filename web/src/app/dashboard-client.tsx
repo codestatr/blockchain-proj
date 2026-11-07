@@ -17,7 +17,7 @@ export default function Dashboard({ user }: { user: User }) {
   const router = useRouter();
   const { address, isConnected, chainId } = useAccount();
   const contractAddress = contractAddressForChain(chainId);
-  const { connectAsync, connectors, isPending: connecting } = useConnect();
+  const { connectAsync, connectors } = useConnect();
   const { disconnect } = useDisconnect();
   const { switchChain, isPending: switching } = useSwitchChain();
   const { signMessageAsync } = useSignMessage();
@@ -37,6 +37,7 @@ export default function Dashboard({ user }: { user: User }) {
   const [error, setError] = useState("");
   const [deposits, setDeposits] = useState<Deposit[]>([]);
   const [walletLinking, setWalletLinking] = useState(false);
+  const [walletConnecting, setWalletConnecting] = useState(false);
   const supported = chainId === hardhatLocal.id || chainId === baseSepolia.id;
   const explorerBase = chainId === baseSepolia.id ? baseSepolia.blockExplorers?.default.url : undefined;
 
@@ -49,25 +50,40 @@ export default function Dashboard({ user }: { user: User }) {
   const { data: totalWeight } = useReadContract({ address: contractAddress, abi: wasteRewardAbi, functionName: "totalWeightInGrams", query: { enabled: supported && contractAddress !== "0x0000000000000000000000000000000000000000" } });
   const totalKg = totalWeight ? (Number(totalWeight) / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 }) : "0";
   const balanceText = balance !== undefined ? Number(formatEther(balance)).toLocaleString(undefined, { maximumFractionDigits: 2 }) : "0.00";
-  const connector = connectors[0];
-
   async function connectWallet() {
     setError("");
-    if (!connector) {
+    if (!connectors.length) {
       setError("No wallet connector is available. Install or enable a browser wallet such as MetaMask, then reload this page.");
       return;
     }
+    setWalletConnecting(true);
+    let timeoutId: number | undefined;
     try {
-      await connectAsync({ connector });
+      const available = await Promise.all(connectors.map(async (candidate) => ({
+        connector: candidate,
+        provider: await candidate.getProvider().catch(() => undefined)
+      })));
+      const selected = available.find((item) => item.provider)?.connector;
+      if (!selected) throw new Error("No browser wallet was found. Unlock Rabby, MetaMask, or Coinbase Wallet, then reload this page.");
+
+      await Promise.race([
+        connectAsync({ connector: selected }),
+        new Promise<never>((_, reject) => {
+          timeoutId = window.setTimeout(() => reject(new Error("The wallet did not respond. Unlock it, close any pending wallet prompt, and try again.")), 20_000);
+        })
+      ]);
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : "Wallet connection failed.";
       if (/provider not found|not found/i.test(message)) {
-        setError("No browser wallet was found. Install or enable MetaMask, then reload this page.");
+        setError("No browser wallet was found. Unlock Rabby, MetaMask, or Coinbase Wallet, then reload this page.");
       } else if (/user rejected|user denied|rejected the request/i.test(message)) {
         setError("The wallet request was cancelled. Approve the connection in your wallet to continue.");
       } else {
         setError(message.length > 240 ? `${message.slice(0, 237)}…` : message);
       }
+    } finally {
+      if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+      setWalletConnecting(false);
     }
   }
 
@@ -150,7 +166,7 @@ export default function Dashboard({ user }: { user: User }) {
 
   return <main className="shell">
     <header className="topbar"><div className="brand"><span className="brand-mark">↻</span> Waste System</div>
-      {isConnected ? <button className="connect" onClick={() => disconnect()}>{shortAddress(address)} · Disconnect</button> : <button className="connect" disabled={connecting} onClick={connectWallet}>{connecting ? "Connecting…" : "Connect wallet"}</button>}
+      {isConnected ? <button className="connect" onClick={() => disconnect()}>{shortAddress(address)} · Disconnect</button> : <button className="connect" disabled={walletConnecting} onClick={connectWallet}>{walletConnecting ? "Connecting…" : "Connect wallet"}</button>}
       <span className="account-name">{user.name}</span><button className="secondary" onClick={logout}>Sign out</button>
     </header>
     <div className="hero"><div><div className="eyebrow">Circular cities start here</div><h1>Waste less.<br/>Earn more.</h1><p className="sub">Your recycling makes a measurable difference.</p></div>
