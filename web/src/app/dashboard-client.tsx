@@ -95,7 +95,8 @@ export default function Dashboard({ user }: { user: User }) {
   async function submitDeposit(event: React.FormEvent) {
     event.preventDefault(); setError("");
     if (!address) { setError("Connect a wallet first."); return; }
-    if (!chainId || !supported || !isConfigured) { setError("Select a supported network with a deployed RCT contract."); return; }
+    if (!chainId || !supported) { setError("Switch your wallet to Base Sepolia before recording a deposit."); return; }
+    if (!isConfigured) { setError("The RCT contract is not configured for this network. Deploy it and add its address to the site environment variables."); return; }
     const grams = Number(weight);
     if (!Number.isInteger(grams) || grams < 1 || grams > 100_000) { setError("Enter a whole number from 1 to 100,000 grams."); return; }
     setSubmitting(true);
@@ -114,7 +115,8 @@ export default function Dashboard({ user }: { user: User }) {
     if (!address || !user.walletAddress || address.toLowerCase() !== user.walletAddress.toLowerCase()) {
       setTransferError("Connect your verified reward wallet before sending RCT."); return;
     }
-    if (!supported || !isConfigured) { setTransferError("Select a supported network with a deployed RCT contract."); return; }
+    if (!supported) { setTransferError("Switch your wallet to Base Sepolia before sending RCT."); return; }
+    if (!isConfigured) { setTransferError("The RCT contract is not configured for this network."); return; }
     if (!isAddress(recipient)) { setTransferError("Enter a valid recipient wallet address."); return; }
     let value: bigint;
     try { value = parseEther(transferAmount); } catch { setTransferError("Enter a valid token amount."); return; }
@@ -172,7 +174,7 @@ export default function Dashboard({ user }: { user: User }) {
     <div className="hero"><div><div className="eyebrow">Circular cities start here</div><h1>Waste less.<br/>Earn more.</h1><p className="sub">Your recycling makes a measurable difference.</p></div>
       {isConnected && <div style={{display:"flex",gap:8,flexWrap:"wrap"}}><button className="secondary" onClick={() => switchToChain(hardhatLocal.id)} disabled={switching}>Localhost</button><button className="secondary" onClick={() => switchToChain(baseSepolia.id)} disabled={switching}>Base Sepolia</button></div>}
     </div>
-    {!isConfigured && <div className="notice">Contract not configured. Set NEXT_PUBLIC_CONTRACT_ADDRESS after deploying the contract.</div>}
+    {!isConfigured && <div className="notice">RCT contract not configured. Deploy it to Base Sepolia and set NEXT_PUBLIC_BASE_SEPOLIA_CONTRACT_ADDRESS in your hosting environment.</div>}
     {isConnected && !supported && <div className="notice">Switch to Localhost or Base Sepolia to use the dashboard. Current network: {chainId ?? "unknown"}.</div>}
     {isConfigured && <div className="contract-strip"><span className="metric-label">RCT contract</span><code>{shortAddress(contractAddress)}</code>{explorerBase && <a href={`${explorerBase}/address/${contractAddress}`} target="_blank" rel="noreferrer">View on BaseScan</a>}<span className="chain-label">{chainId === baseSepolia.id ? "Base Sepolia" : chainId === hardhatLocal.id ? "Hardhat Local" : "Connect a supported wallet"}</span></div>}
     <section className="card wallet-card"><div><div className="metric-label">Verified reward wallet</div><div className="wallet-value">{user.walletAddress ? shortAddress(user.walletAddress) : "No wallet linked"}</div></div>{!user.walletAddress && <button className="connect" onClick={linkWallet} disabled={!isConnected || walletLinking}>{walletLinking ? "Verifying wallet…" : isConnected ? "Sign message to link wallet" : "Connect wallet to link"}</button>}{user.walletAddress && isConnected && user.walletAddress.toLowerCase() !== address?.toLowerCase() && <span className="notice-inline">Connect {shortAddress(user.walletAddress)} to use deposits and view its balance.</span>}</section>
@@ -189,7 +191,7 @@ export default function Dashboard({ user }: { user: User }) {
         </tbody></table></div>
       </article>
       <article className="card bin-card"><div className="bin-icon">♻</div><h2>Record a deposit</h2><p className="muted">Enter the collected material and measured weight. Rewards are sent to your verified wallet.</p>
-        <button className="connect" onClick={() => { setError(""); setModalOpen(true); }} disabled={!isConnected || !supported || !user.walletAddress || user.walletAddress.toLowerCase() !== address?.toLowerCase()}>Record a deposit</button>
+        <button className="connect" onClick={() => { setError(""); setModalOpen(true); }} disabled={!isConnected || !supported || !isConfigured || !user.walletAddress || user.walletAddress.toLowerCase() !== address?.toLowerCase()}>Record a deposit</button>
         <button className="secondary transfer-button" onClick={() => { setTransferError(""); setTransferOpen(true); }} disabled={!isConnected || !supported || !isConfigured || !user.walletAddress || user.walletAddress.toLowerCase() !== address?.toLowerCase()}>Send RCT</button>
         {transferHash && <div className="transfer-receipt">Last transfer: {explorerBase ? <a href={`${explorerBase}/tx/${transferHash}`} target="_blank" rel="noreferrer">View on BaseScan ↗</a> : <code title={transferHash}>{shortAddress(transferHash)}</code>}</div>}
       </article>
