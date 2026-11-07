@@ -36,21 +36,26 @@ export default function Dashboard({ user }: { user: User }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [deposits, setDeposits] = useState<Deposit[]>([]);
+  const [historyQuery, setHistoryQuery] = useState("");
+  const [materialFilter, setMaterialFilter] = useState("all");
+  const [historyPage, setHistoryPage] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
   const [walletLinking, setWalletLinking] = useState(false);
   const [walletConnecting, setWalletConnecting] = useState(false);
   const supported = chainId === hardhatLocal.id || chainId === baseSepolia.id;
   const isConfigured = isAddress(contractAddress) && contractAddress !== "0x0000000000000000000000000000000000000000";
+  const walletMatchesAccount = Boolean(isConnected && address && user.walletAddress && user.walletAddress.toLowerCase() === address.toLowerCase());
   const explorerBase = chainId === baseSepolia.id ? baseSepolia.blockExplorers?.default.url : undefined;
 
-  const { data: balance, refetch: refetchBalance } = useReadContract({ address: contractAddress, abi: wasteRewardAbi, functionName: "balanceOf", args: address ? [address] : undefined, query: { enabled: isConnected && supported && isConfigured } });
-  const { data: depositIds, refetch: refetchDepositIds } = useReadContract({ address: contractAddress, abi: wasteRewardAbi, functionName: "getCitizenDepositIds", args: address ? [address] : undefined, query: { enabled: isConnected && supported && isConfigured } });
-  const { data: onChainRows } = useReadContracts({
+  const { data: balance, isLoading: balanceLoading, refetch: refetchBalance } = useReadContract({ address: contractAddress, abi: wasteRewardAbi, functionName: "balanceOf", args: address ? [address] : undefined, query: { enabled: walletMatchesAccount && supported && isConfigured } });
+  const { data: depositIds, isLoading: depositIdsLoading, refetch: refetchDepositIds } = useReadContract({ address: contractAddress, abi: wasteRewardAbi, functionName: "getCitizenDepositIds", args: address ? [address] : undefined, query: { enabled: walletMatchesAccount && supported && isConfigured } });
+  const { data: onChainRows, isLoading: depositRowsLoading } = useReadContracts({
     contracts: (depositIds ?? []).map((id) => ({ address: contractAddress, abi: wasteRewardAbi, functionName: "deposits" as const, args: [id] })),
     query: { enabled: !!depositIds?.length }
   });
-  const { data: totalWeight } = useReadContract({ address: contractAddress, abi: wasteRewardAbi, functionName: "totalWeightInGrams", query: { enabled: supported && isConfigured } });
-  const totalKg = totalWeight ? (Number(totalWeight) / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 }) : "0";
-  const balanceText = balance !== undefined ? Number(formatEther(balance)).toLocaleString(undefined, { maximumFractionDigits: 2 }) : "0.00";
+  const { data: totalWeight, isLoading: totalWeightLoading, refetch: refetchTotalWeight } = useReadContract({ address: contractAddress, abi: wasteRewardAbi, functionName: "totalWeightInGrams", query: { enabled: supported && isConfigured } });
+  const totalKg = !supported || !isConfigured ? "—" : totalWeightLoading ? "…" : totalWeight !== undefined ? (Number(totalWeight) / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 }) : "—";
+  const balanceText = !walletMatchesAccount || !supported || !isConfigured ? "—" : balanceLoading ? "…" : balance !== undefined ? Number(formatEther(balance)).toLocaleString(undefined, { maximumFractionDigits: 2 }) : "—";
   async function connectWallet() {
     setError("");
     if (!connectors.length) {
@@ -165,6 +170,36 @@ export default function Dashboard({ user }: { user: User }) {
     const known = new Set(rows.map((row) => row.id.toString()));
     return [...deposits.filter((row) => !known.has(row.id.toString())), ...rows];
   }, [deposits, onChainRows]);
+  const filteredHistory = useMemo(() => {
+    const query = historyQuery.trim().toLowerCase();
+    return history.filter((row) => {
+      const matchesMaterial = materialFilter === "all" || row.wasteType.toLowerCase() === materialFilter;
+      const matchesQuery = !query || row.wasteType.toLowerCase().includes(query) || row.txHash?.toLowerCase().includes(query);
+      return matchesMaterial && matchesQuery;
+    });
+  }, [history, historyQuery, materialFilter]);
+  const pageSize = 10;
+  const pageCount = Math.ceil(filteredHistory.length / pageSize);
+  const visibleHistory = filteredHistory.slice(historyPage * pageSize, (historyPage + 1) * pageSize);
+  const historyCount = !walletMatchesAccount || !supported || !isConfigured
+    ? "—"
+    : depositIdsLoading || depositRowsLoading
+      ? "…"
+      : history.length.toString();
+
+  async function refreshDashboard() {
+    setRefreshing(true);
+    setError("");
+    try {
+      const refreshes: Promise<unknown>[] = [refetchTotalWeight()];
+      if (walletMatchesAccount && supported && isConfigured) refreshes.push(refetchBalance(), refetchDepositIds());
+      await Promise.all(refreshes);
+    } catch {
+      setError("Could not refresh blockchain data. Check your wallet network and try again.");
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   return <main className="shell">
     <header className="topbar"><div className="brand"><span className="brand-mark">↻</span> Waste System</div>
@@ -182,13 +217,20 @@ export default function Dashboard({ user }: { user: User }) {
     <section className="grid">
       <article className="card"><div className="metric-label">Your RCT balance</div><div className="metric">{balanceText} <span style={{fontSize:15}}>RCT</span></div><div className="metric-note">10 RCT for every kilogram</div></article>
       <article className="card"><div className="metric-label">Total waste recorded</div><div className="metric">{totalKg} <span style={{fontSize:15}}>kg</span></div><div className="metric-note">On-chain record; weight is user-entered</div></article>
-      <article className="card"><div className="metric-label">Your recorded deposits</div><div className="metric">{history.length}</div><div className="metric-note">Loaded from your reward wallet on chain</div></article>
+      <article className="card"><div className="metric-label">Your recorded deposits</div><div className="metric">{historyCount}</div><div className="metric-note">Loaded from your reward wallet on chain</div></article>
     </section>
     <section className="content">
-      <article className="card"><div className="section-head"><h2>Deposit history</h2><span className="muted">Recent activity</span></div>
+      <article className="card"><div className="section-head"><h2>Deposit history</h2><button className="secondary" type="button" onClick={refreshDashboard} disabled={refreshing || !supported || !isConfigured}>{refreshing ? "Refreshing…" : "Refresh"}</button></div>
+        <div className="history-tools">
+          <input aria-label="Search deposit history" placeholder="Search material or transaction" value={historyQuery} onChange={(event) => { setHistoryQuery(event.target.value); setHistoryPage(0); }} />
+          <select aria-label="Filter deposits by material" value={materialFilter} onChange={(event) => { setMaterialFilter(event.target.value); setHistoryPage(0); }}>
+            <option value="all">All materials</option><option value="plastic">Plastic</option><option value="glass">Glass</option><option value="metal">Metal</option>
+          </select>
+        </div>
         <div className="table-wrap"><table><thead><tr><th>Material</th><th>Weight</th><th>Reward</th><th>Date</th><th>Status</th><th>Transaction</th></tr></thead><tbody>
-          {history.length ? history.map((row) => <tr key={row.id.toString()}><td>{row.wasteType}</td><td>{(Number(row.weight) / 1000).toFixed(2)} kg</td><td>{formatEther(row.reward)} RCT</td><td>{dateLabel(row.timestamp)}</td><td><span className="pill">Confirmed</span></td><td>{row.txHash ? explorerBase ? <a href={`${explorerBase}/tx/${row.txHash}`} target="_blank" rel="noreferrer">View tx ↗</a> : <code title={row.txHash}>{shortAddress(row.txHash)}</code> : <span className="muted">—</span>}</td></tr>) : <tr><td colSpan={6} className="empty">{isConnected ? "No deposits recorded for this wallet yet." : "Connect your wallet to view your recycling activity."}</td></tr>}
+          {visibleHistory.length ? visibleHistory.map((row) => <tr key={row.id.toString()}><td>{row.wasteType}</td><td>{(Number(row.weight) / 1000).toFixed(2)} kg</td><td>{formatEther(row.reward)} RCT</td><td>{dateLabel(row.timestamp)}</td><td><span className="pill">Confirmed</span></td><td>{row.txHash ? explorerBase ? <a href={`${explorerBase}/tx/${row.txHash}`} target="_blank" rel="noreferrer">View tx ↗</a> : <code title={row.txHash}>{shortAddress(row.txHash)}</code> : <span className="muted">—</span>}</td></tr>) : <tr><td colSpan={6} className="empty">{history.length ? "No deposits match these filters." : !isConnected ? "Connect your wallet to view your recycling activity." : !user.walletAddress ? "Link your verified wallet to view its deposits." : !supported ? "Switch to Base Sepolia to load your deposit history." : !isConfigured ? "Deploy and configure the RCT contract to load on-chain history." : depositIdsLoading || depositRowsLoading ? "Loading deposit history…" : "No deposits recorded for this wallet yet."}</td></tr>}
         </tbody></table></div>
+        {pageCount > 1 && <div className="history-pagination"><span className="muted">Page {historyPage + 1} of {pageCount}</span><div><button className="secondary" type="button" onClick={() => setHistoryPage((page) => Math.max(0, page - 1))} disabled={historyPage === 0}>Previous</button><button className="secondary" type="button" onClick={() => setHistoryPage((page) => Math.min(pageCount - 1, page + 1))} disabled={historyPage >= pageCount - 1}>Next</button></div></div>}
       </article>
       <article className="card bin-card"><div className="bin-icon">♻</div><h2>Record a deposit</h2><p className="muted">Enter the collected material and measured weight. Rewards are sent to your verified wallet.</p>
         <button className="connect" onClick={() => { setError(""); setModalOpen(true); }} disabled={!isConnected || !supported || !isConfigured || !user.walletAddress || user.walletAddress.toLowerCase() !== address?.toLowerCase()}>Record a deposit</button>

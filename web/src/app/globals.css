@@ -26,6 +26,13 @@ h1 { font-size: clamp(34px, 5vw, 51px); margin: 10px 0 8px; letter-spacing: -2px
 h2 { margin: 0; font-size: 17px; }
 .muted { color: #829087; font-size: 13px; }
 .table-wrap { overflow-x: auto; }
+.history-tools { display: flex; gap: 10px; margin: -7px 0 16px; }
+.history-tools input, .history-tools select { min-width: 0; padding: 9px 11px; border: 1px solid #dce5dd; border-radius: 9px; background: #fff; color: #17352d; }
+.history-tools input { flex: 1; }
+.history-tools select { min-width: 150px; }
+.history-pagination { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 16px; }
+.history-pagination > div { display: flex; gap: 8px; }
+.history-pagination button:disabled { opacity: .55; cursor: not-allowed; }
 table { width: 100%; border-collapse: collapse; text-align: left; font-size: 13px; }
 th { color: #829087; font-weight: 600; padding: 0 10px 12px 0; }
 td { padding: 14px 10px 14px 0; border-top: 1px solid #eef1ec; white-space: nowrap; }
@@ -75,4 +82,4 @@ td { padding: 14px 10px 14px 0; border-top: 1px solid #eef1ec; white-space: nowr
 .login-page .auth-card { border-color: #e4e9e6; border-radius: 12px; box-shadow: 0 8px 30px rgba(26,45,35,.06); }
 .login-page .auth-card h1 { font-size: 27px; letter-spacing: -.6px; }
 .login-page .auth-brand { margin-bottom: 20px; letter-spacing: -.4px; }
-@media (max-width: 600px) { .account-actions { gap: 6px; } .account-name { display: none; } .wallet-card { align-items: flex-start; flex-direction: column; } .auth-card { padding: 26px 22px; } .chain-label { margin-left: 0; } }
+@media (max-width: 600px) { .account-actions { gap: 6px; } .account-name { display: none; } .wallet-card { align-items: flex-start; flex-direction: column; } .auth-card { padding: 26px 22px; } .chain-label { margin-left: 0; } .history-tools { flex-direction: column; } .history-tools select { width: 100%; } .history-pagination { align-items: flex-start; flex-direction: column; } }
