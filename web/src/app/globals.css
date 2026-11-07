@@ -42,6 +42,8 @@ td { padding: 14px 10px 14px 0; border-top: 1px solid #eef1ec; white-space: nowr
 .bin-card .muted { color: #b9cdc0; }
 .bin-icon { width: 46px; height: 46px; background: #2b5945; display: grid; place-items: center; border-radius: 14px; font-size: 23px; margin-bottom: 20px; }
 .bin-card .connect { width: 100%; background: #b6e1bf; color: #17352d; margin-top: 20px; }
+.bin-card .connect:disabled, .bin-card .secondary:disabled { opacity: .5; cursor: not-allowed; }
+.action-requirement { margin: 12px 0 0; color: #f4d58d; font-size: 12px; line-height: 1.5; }
 .notice { color: #9c6a1b; background: #fff6df; padding: 11px 13px; border-radius: 10px; font-size: 12px; margin: 16px 0; }
 .modal-backdrop { position: fixed; inset: 0; background: rgba(14,35,27,.45); display: grid; place-items: center; padding: 18px; z-index: 5; }
 .modal { width: min(100%, 440px); background: white; border-radius: 18px; padding: 26px; box-shadow: 0 24px 90px #10291f55; }

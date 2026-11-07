@@ -186,6 +186,17 @@ export default function Dashboard({ user }: { user: User }) {
     : depositIdsLoading || depositRowsLoading
       ? "…"
       : history.length.toString();
+  const actionBlockReason = !isConnected
+    ? "Connect Rabby to continue."
+    : !supported
+      ? `Switch Rabby to Base Sepolia (network ${baseSepolia.id}); current network is ${chainId ?? "unknown"}.`
+      : !isConfigured
+        ? "Deploy the RCT contract to this network and configure its address in the hosting environment."
+        : !user.walletAddress
+          ? "Link and verify a wallet before using deposit or transfer actions."
+          : !walletMatchesAccount
+            ? `Connect your verified wallet ${shortAddress(user.walletAddress)} to continue.`
+            : "";
 
   async function refreshDashboard() {
     setRefreshing(true);
@@ -235,6 +246,7 @@ export default function Dashboard({ user }: { user: User }) {
       <article className="card bin-card"><div className="bin-icon">♻</div><h2>Record a deposit</h2><p className="muted">Enter the collected material and measured weight. Rewards are sent to your verified wallet.</p>
         <button className="connect" onClick={() => { setError(""); setModalOpen(true); }} disabled={!isConnected || !supported || !isConfigured || !user.walletAddress || user.walletAddress.toLowerCase() !== address?.toLowerCase()}>Record a deposit</button>
         <button className="secondary transfer-button" onClick={() => { setTransferError(""); setTransferOpen(true); }} disabled={!isConnected || !supported || !isConfigured || !user.walletAddress || user.walletAddress.toLowerCase() !== address?.toLowerCase()}>Send RCT</button>
+        {actionBlockReason && <p className="action-requirement" role="status">{actionBlockReason}</p>}
         {transferHash && <div className="transfer-receipt">Last transfer: {explorerBase ? <a href={`${explorerBase}/tx/${transferHash}`} target="_blank" rel="noreferrer">View on BaseScan ↗</a> : <code title={transferHash}>{shortAddress(transferHash)}</code>}</div>}
       </article>
     </section>
